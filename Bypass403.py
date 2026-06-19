@@ -23,6 +23,7 @@ QUERY_PAYLOADS = [
 	";%09..;",
 	";%2f..",
 	"*",
+ 	"0x85",
 	".abcxyz"
 ]
 
@@ -604,6 +605,61 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 			url = str(baseRequestResponse.getUrl()).replace(requestPath, pathToTest)
 			self.addResultToTable(method, url, payload_type, statusCode, contentLength, is_bypassed, newRequestResult)
 
+	def scanRefererAndOriginSpoofing(self, baseRequestResponse, httpService):
+		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
+		originalHeaders = list(requestInfo.getHeaders())
+		requestBody = baseRequestResponse.getRequest()[requestInfo.getBodyOffset():]
+		method = requestInfo.getMethod()
+		url = str(baseRequestResponse.getUrl())
+		
+		# We want to test Spoofing Referer, Spoofing Origin, and both.
+		# Construct the modifications.
+		test_scenarios = [
+			("Referer Spoofing", {"referer": "Referer: " + url}),
+			("Origin Spoofing", {"origin": "Origin: " + url}),
+			("Referer & Origin Spoofing", {"referer": "Referer: " + url, "origin": "Origin: " + url})
+		]
+		
+		for scenario_name, headers_to_set in test_scenarios:
+			headers = list(originalHeaders)
+			
+			# Tracks which of the targets were already in the header list
+			modified_keys = set()
+			
+			for index, header in enumerate(headers):
+				header_lower = header.lower()
+				for key, new_val in headers_to_set.items():
+					if header_lower.startswith(key + ":"):
+						headers[index] = new_val
+						modified_keys.add(key)
+						
+			# Add headers that weren't already present
+			for key, new_val in headers_to_set.items():
+				if key not in modified_keys:
+					headers.append(new_val)
+					
+			headersAsJavaSublist = ArrayList()
+			for h in headers:
+				headersAsJavaSublist.add(String(h))
+				
+			try:
+				newRequest = self.helpers.buildHttpMessage(headersAsJavaSublist, requestBody)
+				newRequestResult = self.callbacks.makeHttpRequest(httpService, newRequest)
+				response = newRequestResult.getResponse()
+				if response:
+					responseInfo = self.helpers.analyzeResponse(response)
+					statusCode = str(responseInfo.getStatusCode())
+					contentLength = self.getContentLength(response, responseInfo)
+				else:
+					statusCode = "No response"
+					contentLength = "0"
+			except Exception as e:
+				print("Error making Spoofing request: " + str(e))
+				continue
+				
+			is_bypassed = (statusCode == "200")
+			self.addResultToTable(method, url, scenario_name, statusCode, contentLength, is_bypassed, newRequestResult)
+
 	def testRequest(self, baseRequestResponse):
 		httpService = baseRequestResponse.getHttpService()
 		
@@ -622,6 +678,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 		self.scanPostAndEmptyCL(baseRequestResponse, httpService)
 		self.scanDowngradedHttp(baseRequestResponse, httpService)
 		self.scanCaseSensitive(baseRequestResponse, httpService)
+		self.scanRefererAndOriginSpoofing(baseRequestResponse, httpService)
 		return None
 
 	def consolidateDuplicateIssues(self, existingIssue, newIssue):
