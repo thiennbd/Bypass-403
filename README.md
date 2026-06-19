@@ -25,7 +25,7 @@
 
 ---
 
-# Bypass403 - Burp Suite Extension
+# Bypass403 - Burp Suite Extension (English)
 
 **Bypass403** is a Burp Suite extension designed to automate the process of bypassing `403 Forbidden` restrictions on web pages or APIs. It is built in Python (Jython) and provides an intuitive GUI integrated directly into Burp Suite.
 
@@ -49,3 +49,9 @@
 
 1.  In the **HTTP History** tab (or any other request tab), right-click on the request that returned a `403 Forbidden` status -> Select **Bypass 403**.
 2.  Go to the **Bypass403** tab on the main Burp Suite menu to monitor the testing progress and analyze request/response details.
+
+---
+
+# References
+- https://blogs.jsmon.sh/403-bypass-tricks-every-bug-hunter-should-know/
+- https://github.com/portswigger/403-bypasser
