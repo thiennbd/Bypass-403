@@ -210,7 +210,7 @@ class uiTab(JFrame, IMessageEditorController):
 
 		# Results JTable
 		self.resultsTable = JTable()
-		resultsTableColumns = ["#", "Method", "URL", "Payload / Type", "Status Code", "Length"]
+		resultsTableColumns = ["#", "Method", "Path", "Payload / Type", "Status Code", "Length"]
 		self.resultsTableModel = NumericTableModel([], resultsTableColumns)
 		self.resultsTable.setModel(self.resultsTableModel)
 		self.resultsTable.setAutoCreateRowSorter(True)
@@ -419,8 +419,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 					continue
 				
 				is_bypassed = (statusCode == "200")
-				url = str(baseRequestResponse.getUrl()).replace(requestPath, pathToTest)
-				self.addResultToTable(method, url, "Query: " + payload, statusCode, contentLength, is_bypassed, newRequestResult)
+				self.addResultToTable(method, pathToTest, "Query: " + payload, statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def scanHeaderPayloads(self, baseRequestResponse, headerPayloadsFromTable, httpService):
 		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
@@ -466,7 +465,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 				continue
 				
 			is_bypassed = (statusCode == "200")
-			self.addResultToTable(method, url, "Header: " + payload, statusCode, contentLength, is_bypassed, newRequestResult)
+			self.addResultToTable(method, requestInfo.getUrl().getPath(), "Header: " + payload, statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def scanPostAndEmptyCL(self, baseRequestResponse, httpService):
 		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
@@ -497,7 +496,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 				return
 				
 			is_bypassed = (statusCode == "200")
-			self.addResultToTable("POST", str(baseRequestResponse.getUrl()), "Method: POST & CL: 0", statusCode, contentLength, is_bypassed, newRequestResult)
+			self.addResultToTable("POST", requestInfo.getUrl().getPath(), "Method: POST & CL: 0", statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def scanDowngradedHttp(self, baseRequestResponse, httpService):
 		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
@@ -525,7 +524,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 				return
 				
 			is_bypassed = (statusCode == "200")
-			self.addResultToTable(requestInfo.getMethod(), str(baseRequestResponse.getUrl()), "Protocol: HTTP/1.0 & No Headers", statusCode, contentLength, is_bypassed, newRequestResult)
+			self.addResultToTable(requestInfo.getMethod(), requestInfo.getUrl().getPath(), "Protocol: HTTP/1.0 & No Headers", statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def capitalize_first_letters(self, path):
 		segments = path.split("/")
@@ -602,8 +601,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 				continue
 				
 			is_bypassed = (statusCode == "200")
-			url = str(baseRequestResponse.getUrl()).replace(requestPath, pathToTest)
-			self.addResultToTable(method, url, payload_type, statusCode, contentLength, is_bypassed, newRequestResult)
+			self.addResultToTable(method, pathToTest, payload_type, statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def scanRefererAndOriginSpoofing(self, baseRequestResponse, httpService):
 		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
@@ -658,7 +656,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 				continue
 				
 			is_bypassed = (statusCode == "200")
-			self.addResultToTable(method, url, scenario_name, statusCode, contentLength, is_bypassed, newRequestResult)
+			self.addResultToTable(method, requestInfo.getUrl().getPath(), scenario_name, statusCode, contentLength, is_bypassed, newRequestResult)
 
 	def testRequest(self, baseRequestResponse):
 		httpService = baseRequestResponse.getHttpService()
