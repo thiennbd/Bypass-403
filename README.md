@@ -22,3 +22,30 @@
 
 1.  Tại tab **HTTP History** (hoặc bất kỳ tab nào có request), click chuột phải vào request bị chặn `403 Forbidden` -> Chọn **Bypass 403**.
 2.  Di chuyển sang tab **Bypass403** trên menu chính của Burp Suite để theo dõi tiến trình kiểm thử và phân tích kết quả.
+
+---
+
+# Bypass403 - Burp Suite Extension
+
+**Bypass403** is a Burp Suite extension designed to automate the process of bypassing `403 Forbidden` restrictions on web pages or APIs. It is built in Python (Jython) and provides an intuitive GUI integrated directly into Burp Suite.
+
+## Supported Techniques
+
+*   **Path Manipulation**: Try inserting special characters into the path or query string (e.g. `..;`, `%2e`, `%2f`, `;%09`, etc.).
+*   **Header Manipulation**: Inject or replace HTTP headers to spoof IP addresses or routing configurations (e.g. `X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto`, etc.).
+*   **HTTP Method Manipulation**: Change the request method from `GET` to `POST` with `Content-Length: 0`.
+*   **Downgrade Protocol**: Downgrade the connection protocol to `HTTP/1.0` and remove all other HTTP headers.
+*   **Case Sensitive**: Alternate casing of the path segments (e.g., capitalize first letters `/Example/Demo` or alternate case `/ExAmPlE/DeMo`).
+*   **Referer & Origin Spoofing**: Modify or add `Referer` and `Origin` headers to point to the current request URL to bypass server filters.
+
+## Installation Guide
+
+1.  Ensure you have configured the **Jython** environment in Burp Suite (Tab **Extensions** -> **Core extension settings** -> **Python environment**).
+2.  Navigate to **Extensions** -> **Installed** -> click **Add**.
+3.  Choose **Extension type** as `Python` and select the `Bypass403.py` file.
+4.  Click **Next** to load the extension.
+
+## Usage Guide
+
+1.  In the **HTTP History** tab (or any other request tab), right-click on the request that returned a `403 Forbidden` status -> Select **Bypass 403**.
+2.  Go to the **Bypass403** tab on the main Burp Suite menu to monitor the testing progress and analyze request/response details.
