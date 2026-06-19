@@ -2,14 +2,14 @@ from burp import IBurpExtender, IScanIssue, IScannerCheck, IContextMenuFactory, 
 from javax.swing import JMenuItem, JPanel, JButton, JList, JTable, table, JLabel, JScrollPane, JTextField, WindowConstants, JFrame, JSplitPane, JTabbedPane, SwingUtilities
 from javax.swing.table import DefaultTableCellRenderer
 from java.awt import BorderLayout, GridLayout, Dimension, Color
-from java.lang import Runnable
+from java.lang import Runnable, Integer
 import java.util.ArrayList as ArrayList
 import java.lang.String as String
 from java.lang import Short
 import thread
 import sys
 
-queryPayloadsFromFile = [
+QUERY_PAYLOADS = [
 	"%09",
 	"%20",
 	"%23",
@@ -22,10 +22,11 @@ queryPayloadsFromFile = [
 	";%09..",
 	";%09..;",
 	";%2f..",
-	"*"
+	"*",
+	".abcxyz"
 ]
 
-headerPayloadsFromFile = [
+HEADER_PAYLOADS = [
 	"Client-IP: 127.0.0.1",
 	"X-Real-Ip: 127.0.0.1",
 	"Redirect: 127.0.0.1",
@@ -36,7 +37,9 @@ headerPayloadsFromFile = [
 	"X-Forwarded-For: 127.0.0.1",
 	"X-Forwarded-Host: 127.0.0.1",
 	"X-Forwarded-Port: 80",
-	"X-True-IP: 127.0.0.1"
+	"X-True-IP: 127.0.0.1",
+	"X-Internal-Request: true",
+	"X-Forwarded-Proto: https"
 ]
 
 extentionName = "Bypass403"
@@ -64,6 +67,15 @@ class StatusColorRenderer(DefaultTableCellRenderer):
 				cell.setBackground(table.getBackground())
 				cell.setForeground(table.getForeground())
 		return cell
+
+class NumericTableModel(table.DefaultTableModel):
+	def __init__(self, data, columns):
+		table.DefaultTableModel.__init__(self, data, columns)
+
+	def getColumnClass(self, columnIndex):
+		if columnIndex == 0:
+			return Integer
+		return String
 
 class uiTab(JFrame, IMessageEditorController):
 	def queryAddButtonClicked(self, event):
@@ -101,11 +113,13 @@ class uiTab(JFrame, IMessageEditorController):
 			tableModel.removeRow(row)
 
 	def clearResultsButtonClicked(self, event):
+		self.resultsTable.setRowSorter(None)
 		self.resultsTableModel.setRowCount(0)
 		self.resultsData = []
 		self.currentlySelectedMessage = None
 		self.requestViewer.setMessage([], True)
 		self.responseViewer.setMessage([], False)
+		self.resultsTable.setAutoCreateRowSorter(True)
 
 	def __init__(self, callbacks):
 		self.callbacks = callbacks
@@ -130,11 +144,11 @@ class uiTab(JFrame, IMessageEditorController):
 		self.headerPayloadsRemoveButton = JButton("Remove", actionPerformed=self.headerRemoveButtonClicked)
 
 		queryTableData = []
-		for queryPayload in queryPayloadsFromFile:
+		for queryPayload in QUERY_PAYLOADS:
 			queryTableData.append([queryPayload])
 
 		headerTableData = []
-		for headerPayload in headerPayloadsFromFile:
+		for headerPayload in HEADER_PAYLOADS:
 			headerTableData.append([headerPayload])
 
 		queryTableColumns = [None]
@@ -196,7 +210,7 @@ class uiTab(JFrame, IMessageEditorController):
 		# Results JTable
 		self.resultsTable = JTable()
 		resultsTableColumns = ["#", "Method", "URL", "Payload / Type", "Status Code", "Length"]
-		self.resultsTableModel = table.DefaultTableModel([], resultsTableColumns)
+		self.resultsTableModel = NumericTableModel([], resultsTableColumns)
 		self.resultsTable.setModel(self.resultsTableModel)
 		self.resultsTable.setAutoCreateRowSorter(True)
 		self.resultsTable.getSelectionModel().addListSelectionListener(self.rowSelected)
@@ -309,11 +323,13 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 			def __init__(self, tab):
 				self.tab = tab
 			def run(self):
+				self.tab.resultsTable.setRowSorter(None)
 				self.tab.resultsTableModel.setRowCount(0)
 				self.tab.resultsData = []
 				self.tab.currentlySelectedMessage = None
 				self.tab.requestViewer.setMessage([], True)
 				self.tab.responseViewer.setMessage([], False)
+				self.tab.resultsTable.setAutoCreateRowSorter(True)
 		SwingUtilities.invokeLater(TableClearer(self.frm))
 
 	def addResultToTable(self, method, url, payload_type, status_code, content_length, is_bypassed, httpMessage):
@@ -510,6 +526,84 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 			is_bypassed = (statusCode == "200")
 			self.addResultToTable(requestInfo.getMethod(), str(baseRequestResponse.getUrl()), "Protocol: HTTP/1.0 & No Headers", statusCode, contentLength, is_bypassed, newRequestResult)
 
+	def capitalize_first_letters(self, path):
+		segments = path.split("/")
+		capitalized = []
+		for segment in segments:
+			if segment:
+				capitalized.append(segment[0].upper() + segment[1:])
+			else:
+				capitalized.append(segment)
+		return "/".join(capitalized)
+
+	def alternate_case(self, path):
+		segments = path.split("/")
+		alternated = []
+		for segment in segments:
+			if segment:
+				alt_segment = ""
+				for idx, char in enumerate(segment):
+					if idx % 2 == 0:
+						alt_segment += char.upper()
+					else:
+						alt_segment += char.lower()
+				alternated.append(alt_segment)
+			else:
+				alternated.append(segment)
+		return "/".join(alternated)
+
+	def scanCaseSensitive(self, baseRequestResponse, httpService):
+		requestPath = baseRequestResponse.getUrl().getPath()
+		if not requestPath or requestPath == "/":
+			return
+			
+		path_caps = self.capitalize_first_letters(requestPath)
+		path_alt = self.alternate_case(requestPath)
+		
+		test_paths = []
+		if path_caps != requestPath:
+			test_paths.append((path_caps, "Case Sensitive: First Letter Capitalized"))
+		if path_alt != requestPath and path_alt != path_caps:
+			test_paths.append((path_alt, "Case Sensitive: Alternating Case"))
+			
+		requestInfo = self.helpers.analyzeRequest(baseRequestResponse)
+		originalHeaders = list(requestInfo.getHeaders())
+		requestBody = baseRequestResponse.getRequest()[requestInfo.getBodyOffset():]
+		method = requestInfo.getMethod()
+		
+		for pathToTest, payload_type in test_paths:
+			headers = list(originalHeaders)
+			if len(headers) > 0:
+				requestLineParts = headers[0].split(" ")
+				if len(requestLineParts) >= 2:
+					originalPathWithQuery = requestLineParts[1]
+					newPathWithQuery = originalPathWithQuery.replace(requestPath, pathToTest, 1)
+					requestLineParts[1] = newPathWithQuery
+					headers[0] = " ".join(requestLineParts)
+			
+			headersAsJavaSublist = ArrayList()
+			for h in headers:
+				headersAsJavaSublist.add(String(h))
+				
+			try:
+				newRequest = self.helpers.buildHttpMessage(headersAsJavaSublist, requestBody)
+				newRequestResult = self.callbacks.makeHttpRequest(httpService, newRequest)
+				response = newRequestResult.getResponse()
+				if response:
+					responseInfo = self.helpers.analyzeResponse(response)
+					statusCode = str(responseInfo.getStatusCode())
+					contentLength = self.getContentLength(response, responseInfo)
+				else:
+					statusCode = "No response"
+					contentLength = "0"
+			except Exception as e:
+				print("Error making Case Sensitive request: " + str(e))
+				continue
+				
+			is_bypassed = (statusCode == "200")
+			url = str(baseRequestResponse.getUrl()).replace(requestPath, pathToTest)
+			self.addResultToTable(method, url, payload_type, statusCode, contentLength, is_bypassed, newRequestResult)
+
 	def testRequest(self, baseRequestResponse):
 		httpService = baseRequestResponse.getHttpService()
 		
@@ -527,6 +621,7 @@ class BurpExtender(IBurpExtender, IScannerCheck, IContextMenuFactory, ITab):
 		self.scanHeaderPayloads(baseRequestResponse, headerPayloadsFromTable, httpService)
 		self.scanPostAndEmptyCL(baseRequestResponse, httpService)
 		self.scanDowngradedHttp(baseRequestResponse, httpService)
+		self.scanCaseSensitive(baseRequestResponse, httpService)
 		return None
 
 	def consolidateDuplicateIssues(self, existingIssue, newIssue):
